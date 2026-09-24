@@ -1,0 +1,8 @@
+<resources>
+    <item name="all_apps" type="id"/>
+    <item name="preferences" type="id"/>
+    <item name="search_apps" type="id"/>
+    <item name="app_list" type="id"/>
+    <item name="empty_apps" type="id"/>
+    <item name="hidden_apps" type="id"/>
+</resources>

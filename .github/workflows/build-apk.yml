@@ -1,0 +1,76 @@
+name: Build and test Android 12+ launcher
+'on':
+  workflow_dispatch:
+  push:
+    branches: [main, 'launcher/**']
+permissions:
+  contents: read
+concurrency:
+  group: quiet-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - run: sdkmanager 'platforms;android-35' 'build-tools;34.0.0'
+      - run: gradle --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Quiet-Launcher-APK-built
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Build-reports
+          path: app/build/reports/
+  compatibility:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        api: [31, 32, 33, 34, 35, 36]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - run: sdkmanager 'platforms;android-35' 'build-tools;34.0.0'
+      - name: Allow this disposable runner to use its emulator accelerator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot-save
+          script: gradle --no-daemon :app:connectedDebugAndroidTest
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Device-reports-API-${{ matrix.api }}
+          path: |
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
