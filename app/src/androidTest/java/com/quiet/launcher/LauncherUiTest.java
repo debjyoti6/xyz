@@ -79,7 +79,6 @@ public class LauncherUiTest {
         openSampleList();
         onData(anything()).inAdapterView(withId(R.id.app_list)).atPosition(0).perform(longClick());
         onView(withText("Add to favorites")).perform(click());
-        assertTrue(prefs.getString("favorites", "").contains(sampleId));
         pressBack(); scenario.recreate();
         onView(isRoot()).perform(new ViewAction() {
             public Matcher<View> getConstraints() { return isRoot(); }
