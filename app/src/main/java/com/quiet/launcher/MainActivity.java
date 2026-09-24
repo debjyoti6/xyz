@@ -34,7 +34,7 @@ import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Native Android 12+ launcher. No network, accessibility, or device-admin permissions. */
+/** Native launcher with an optional, explicitly enabled distraction guard. */
 public final class MainActivity extends Activity {
     private SharedPreferences prefs;
     private final ArrayList<App> apps = new ArrayList<>();
@@ -81,6 +81,7 @@ public final class MainActivity extends Activity {
                 android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::home);
         }
         if (!prefs.getBoolean("welcomed", false)) welcome();
+        else if (state != null && "focus".equals(state.getString("screen"))) focusSettings();
         else if (state != null && "settings".equals(state.getString("screen"))) settings();
         else if (state != null && "apps".equals(state.getString("screen"))) {
             allApps(); search.setText(state.getString("query", ""));
@@ -100,7 +101,7 @@ public final class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(packagesChanged, f, Context.RECEIVER_NOT_EXPORTED);
         else registerReceiver(packagesChanged, f);
     }
-    @Override protected void onResume() { super.onResume(); loadApps(); }
+    @Override protected void onResume() { super.onResume(); if ("focus".equals(screen)) focusSettings(); loadApps(); }
     @Override protected void onPause() { cancelPause(); super.onPause(); }
     @Override protected void onStop() {
         if (started) { unregisterReceiver(packagesChanged); started = false; }
@@ -223,6 +224,7 @@ public final class MainActivity extends Activity {
         }
         gap(body,26);
         TextView all = action("All apps  →",this::allApps); all.setId(R.id.all_apps); body.addView(all);
+        TextView focus=action(prefs.getLong("focusUntil",0)>System.currentTimeMillis()?"Focus is active · controls":"Focus & Scroll Guard",this::focusSettings); body.addView(focus);
         TextView settings = action("Preferences",this::settings); settings.setId(R.id.preferences); body.addView(settings);
     }
     private App find(String id) { for (App a: apps) if (a.id.equals(id)) return a; return null; }
@@ -337,7 +339,16 @@ public final class MainActivity extends Activity {
     private int pauseSeconds() { return Math.max(3, Math.min(15, prefs.getInt("pauseSeconds", 5))); }
     private void launch(App app) {
         closeKeyboard();
-        if(!paused.contains(app.id)) { openApp(app); return; }
+        String pkg=app.component.getPackageName();
+        if(guarded(pkg) && !GuardPolicy.isEssential(this,pkg)) {
+            long now=System.currentTimeMillis();
+            if(GuardPolicy.blocked(prefs, pkg, now)) {
+                dialog().setTitle("Take this time back")
+                    .setMessage(prefs.getLong("focusUntil",0)>now ? "This app is paused during your focus session." : "Take a one-minute break before opening this app again.")
+                    .setPositiveButton("Stay focused",null).setNeutralButton("Focus controls",(d,w)->focusSettings()).show();return;
+            }
+        }
+        if(!paused.contains(app.id) && !guarded(pkg)) { openApp(app); return; }
         cancelPause(); int seconds=pauseSeconds();
         pauseDialog=dialog().setTitle("Take a breath.").setMessage("What are you opening "+label(app)+" for?")
             .setNegativeButton("Stay here",null).setPositiveButton("Wait "+seconds+"s",(d,w)->openApp(app)).create();
@@ -367,14 +378,86 @@ public final class MainActivity extends Activity {
     private void defaultHome() {
         RoleManager rm=getSystemService(RoleManager.class);
         if(rm!=null && rm.isRoleAvailable(RoleManager.ROLE_HOME) && !rm.isRoleHeld(RoleManager.ROLE_HOME)) {
-            safeStart(rm.createRequestRoleIntent(RoleManager.ROLE_HOME)); return;
+            try { startActivityForResult(rm.createRequestRoleIntent(RoleManager.ROLE_HOME), 100); return; }
+            catch (RuntimeException ignored) { /* OEM fallback below */ }
         }
-        safeStart(new Intent(Settings.ACTION_HOME_SETTINGS));
+        openHomeSettings();
+    }
+    private void openHomeSettings() {
+        try { startActivity(new Intent(Settings.ACTION_HOME_SETTINGS)); }
+        catch (RuntimeException e) {
+            try { startActivity(new Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)); }
+            catch (RuntimeException ignored) { safeStart(new Intent(Settings.ACTION_SETTINGS)); }
+        }
+    }
+    @Override protected void onActivityResult(int request, int result, Intent data) {
+        super.onActivityResult(request, result, data);
+        if (request == 100) {
+            if (isDefaultHome()) { prefs.edit().putBoolean("welcomed",true).apply(); home(); toast("Quiet is your home screen."); }
+            else dialog().setTitle("Choose Quiet in Android settings")
+                .setMessage("Open Home app settings, then select Quiet Launcher. You can switch back at any time.")
+                .setPositiveButton("Open Home settings",(d,w)->openHomeSettings())
+                .setNegativeButton("Later",null).show();
+        }
+    }
+    private boolean guarded(String pkg) {
+        return prefs.getStringSet("guarded",Collections.emptySet()).contains(pkg);
+    }
+    private void chooseDistractions() {
+        ArrayList<App> choices=new ArrayList<>(); HashSet<String> seen=new HashSet<>();
+        for(App a:apps) if(!GuardPolicy.isEssential(this,a.component.getPackageName()) && seen.add(a.component.getPackageName())) choices.add(a);
+        if(choices.isEmpty()) { toast("Apps are still loading. Try again in a moment."); return; }
+        Set<String> selected=new HashSet<>(prefs.getStringSet("guarded",Collections.emptySet()));
+        String[] labels=new String[choices.size()]; boolean[] checked=new boolean[choices.size()];
+        for(int i=0;i<labels.length;i++) { labels[i]=label(choices.get(i)); checked[i]=selected.contains(choices.get(i).component.getPackageName()); }
+        dialog().setTitle("Choose distracting apps").setMultiChoiceItems(labels,checked,(d,i,on)->{
+            String pkg=choices.get(i).component.getPackageName(); if(on) selected.add(pkg); else selected.remove(pkg);
+        }).setPositiveButton("Save",(d,w)->{prefs.edit().putStringSet("guarded",selected).apply();focusSettings();})
+          .setNegativeButton("Cancel",null).show();
+    }
+    private void focusSettings() {
+        closeKeyboard(); frame("focus"); LinearLayout body=scrollingBody();
+        body.addView(action("←  Home",this::home)); body.addView(text("Make time for life",30,fg)); gap(body,16);
+        body.addView(text("Choose the apps that pull you into scrolling. Pause before opening them, or keep them closed while you focus.",17,muted));
+        body.addView(action("Distracting apps: "+prefs.getStringSet("guarded",Collections.emptySet()).size(),this::chooseDistractions));
+        body.addView(action("Start a focus session",()->{
+            if(prefs.getStringSet("guarded",Collections.emptySet()).isEmpty()) {chooseDistractions();return;}
+            int[] minutes={15,25,45,60}; String[] names={"15 minutes","25 minutes","45 minutes","60 minutes"};
+            dialog().setTitle("How long do you want to focus?").setItems(names,(d,i)->{
+                prefs.edit().putLong("focusUntil",System.currentTimeMillis()+minutes[i]*60000L).apply();home();
+            }).show();
+        }));
+        long left=prefs.getLong("focusUntil",0)-System.currentTimeMillis();
+        if(left>0) {
+            body.addView(text("Focus active · about "+((left+59999)/60000)+" minutes left",18,fg));
+            body.addView(action("End focus session",()->dialog().setTitle("End focus early?")
+                .setMessage("Your selected apps will become available again.").setNegativeButton("Keep focusing",null)
+                .setPositiveButton("End session",(d,w)->{prefs.edit().remove("focusUntil").apply();focusSettings();}).show()));
+        }
+        body.addView(action("Scroll session: "+prefs.getInt("sessionMinutes",5)+" minutes",()->{
+            int[] values={2,5,10,15}; dialog().setTitle("Return home after continuous use")
+                .setItems(new String[]{"2 minutes","5 minutes","10 minutes","15 minutes"},(d,i)->{
+                    prefs.edit().putInt("sessionMinutes",values[i]).apply();focusSettings();}).show();
+        }));
+        body.addView(text("Scroll Guard: "+(GuardService.isEnabled(this)?"enabled":"off"),20,fg));
+        body.addView(text("With Scroll Guard enabled, selected apps are closed during focus sessions. Outside focus, it returns you home after your session limit and adds a one-minute break. Without it, pauses and focus blocks apply only to apps opened from Quiet.",16,muted));
+        body.addView(action(GuardService.isEnabled(this)?"Manage Scroll Guard access":"Enable Scroll Guard",()->{
+            dialog().setTitle("Optional Accessibility access")
+                .setMessage("Quiet uses app-switch events to identify the foreground app and time your selected apps. When a focus block or session limit applies, it performs the Home action. It does not read screen text, messages, passwords, or browsing content; no information leaves your phone. You can turn it off in Accessibility settings at any time. Some phones restrict accessibility for sideloaded apps; if Android blocks it, use launcher-only focus controls.")
+                .setNegativeButton("Not now",null).setPositiveButton("Open Accessibility settings",(d,w)->safeStart(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))).show();
+        }));
+        body.addView(action("Android Digital Wellbeing",()->{
+            try { startActivity(new Intent("android.settings.WELLBEING_SETTINGS")); }
+            catch(RuntimeException e) { safeStart(new Intent(Settings.ACTION_SETTINGS)); toast("Search Settings for Digital Wellbeing or app timers."); }
+        }));
+        body.addView(text("Phone, Settings and your default home app are excluded. Focus can always be ended here. Guard does not detect individual Reels or Shorts: it limits the entire selected app.",15,muted));
     }
     private void settings() {
         closeKeyboard(); frame("settings"); LinearLayout body=scrollingBody();
         body.addView(action("←  Home",this::home)); body.addView(text("Preferences",32,fg)); gap(body,18);
         body.addView(action(isDefaultHome()?"Change default home app":"Set as default home",this::defaultHome));
+        body.addView(action("Open Android Home app settings",this::openHomeSettings));
+        body.addView(action("Focus & Scroll Guard",this::focusSettings));
         body.addView(action(light?"Appearance: Paper":"Appearance: Black",()->{prefs.edit().putBoolean("light",!light).apply();settings();}));
         body.addView(action("App text size: "+appTextSize(),()->{
             String[] labels={"Compact · 24","Comfortable · 28","Large · 32"}; int[] sizes={24,28,32};
@@ -390,7 +473,7 @@ public final class MainActivity extends Activity {
         body.addView(action("Remove all opening pauses",()->{paused.clear();prefs.edit().putStringSet("paused",new HashSet<>(paused)).apply();toast("Opening pauses removed.");}));
         body.addView(action("Android settings",()->safeStart(new Intent(Settings.ACTION_SETTINGS))));
         body.addView(action("Help & privacy",()->dialog().setTitle("Your phone, your choice")
-            .setMessage("Hold an app to rename, favorite, hide, or add an opening pause.\n\nTo switch back, open Android Settings → Apps → Default apps → Home app.\n\nPauses work only for apps opened from Quiet. Hidden apps remain accessible outside Quiet. This is not a device-wide app blocker.\n\nOffline. No ads, account, analytics, or sensitive permissions. Preferences stay on this device; Android backup is disabled.\n\nVersion 1.1 · Android 12+ · Personal profile only. Work profiles, Private Space, widgets, notification filtering, and in-app time reminders are not included.")
+            .setMessage("Hold an app to rename, favorite, hide, or add an opening pause.\n\nTo switch back, open Android Settings → Apps → Default apps → Home app.\n\nPauses work only for apps opened from Quiet. Hidden apps remain accessible outside Quiet. Enable Scroll Guard in Focus controls to apply selected-app blocks outside Quiet too.\n\nOffline. No ads, account or analytics. Scroll Guard is optional and requires Accessibility access. It sees app-switch events only, never screen content. Preferences stay on this device; Android backup is disabled.\n\nVersion 1.2 · Android 12+ · Personal profile only. Work profiles, Private Space, widgets, notification filtering are not included.")
             .setPositiveButton("Got it",null).show()));
     }
 }

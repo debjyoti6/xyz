@@ -32,7 +32,7 @@ import static androidx.test.espresso.matcher.ViewMatchers.*;
 import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.*;
 
-/** Acceptance checks run on Android emulators, not yet executed in the authoring environment. */
+/** Acceptance checks for launcher registration, preferences and focus behavior. */
 @RunWith(AndroidJUnit4.class)
 public class LauncherUiTest {
     private ActivityScenario<MainActivity> scenario;
@@ -79,21 +79,21 @@ public class LauncherUiTest {
         openSampleList();
         onData(anything()).inAdapterView(withId(R.id.app_list)).atPosition(0).perform(longClick());
         onView(withText("Add to favorites")).perform(click());
+        // Parse JSON: Android may escape the slash in a component name.
+        try { assertEquals(sampleId,new org.json.JSONArray(prefs.getString("favorites","[]")).getString(0)); }
+        catch(org.json.JSONException e) { throw new AssertionError(e); }
         pressBack(); scenario.recreate();
-        onView(isRoot()).perform(new ViewAction() {
-            public Matcher<View> getConstraints() { return isRoot(); }
-            public String getDescription() { return "wait for favorite after recreation"; }
-            public void perform(UiController ui, View root) {
-                long deadline=android.os.SystemClock.uptimeMillis()+8000;
-                do {
-                    for(View v: androidx.test.espresso.util.TreeIterables.breadthFirstViewTraversal(root)) {
-                        if("Test Essential, favorite".contentEquals(v.getContentDescription()==null?"":v.getContentDescription())) return;
-                    }
-                    ui.loopMainThreadForAtLeast(50);
-                } while(android.os.SystemClock.uptimeMillis()<deadline);
-                throw new AssertionError("Favorite did not reappear after recreation");
-            }
-        });
+        long deadline=android.os.SystemClock.uptimeMillis()+8000;
+        boolean[] found={false};
+        do {
+            scenario.onActivity(activity->{
+                for(View v:androidx.test.espresso.util.TreeIterables.breadthFirstViewTraversal(activity.getWindow().getDecorView()))
+                    if("Test Essential, favorite".contentEquals(v.getContentDescription()==null?"":v.getContentDescription())) found[0]=true;
+            });
+            if(found[0]) break;
+            android.os.SystemClock.sleep(50);
+        } while(android.os.SystemClock.uptimeMillis()<deadline);
+        assertTrue("Favorite must survive activity recreation",found[0]);
         onView(withContentDescription("Test Essential, favorite")).check(matches(isDisplayed()));
     }
     @Test public void hiddenAppCanBeRestoredThroughSettings() {
@@ -131,4 +131,27 @@ public class LauncherUiTest {
         onView(withId(R.id.search_apps)).perform(replaceText("zzzz-unmatched-app"),closeSoftKeyboard());
         onView(withId(R.id.empty_apps)).check(matches(isDisplayed()));
     }
+    @Test public void registeredAsHomeAndRoleRequestResolves() {
+        Context c=InstrumentationRegistry.getInstrumentation().getTargetContext();
+        Intent home=new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME);
+        boolean found=false;
+        for(ResolveInfo r:c.getPackageManager().queryIntentActivities(home,0))
+            if(r.activityInfo.packageName.equals(c.getPackageName()) && r.activityInfo.exported) found=true;
+        assertTrue("Quiet must be a HOME candidate",found);
+        android.app.role.RoleManager role=c.getSystemService(android.app.role.RoleManager.class);
+        assertTrue(role.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME));
+        assertNotNull(c.getPackageManager().resolveActivity(role.createRequestRoleIntent(android.app.role.RoleManager.ROLE_HOME),0));
+    }
+    @Test public void focusBlocksSelectedAppAndExpires() {
+        String pkg=ComponentName.unflattenFromString(sampleId).getPackageName();
+        prefs.edit().putStringSet("guarded",Collections.singleton(pkg)).putLong("focusUntil",2000L).commit();
+        assertTrue(GuardPolicy.blocked(prefs,pkg,1999));
+        assertFalse(GuardPolicy.blocked(prefs,pkg,2000));
+        assertFalse(GuardPolicy.blocked(prefs,"not.selected",1000));
+        prefs.edit().remove("focusUntil").putLong("break:"+pkg,4000L).commit();
+        assertTrue(GuardPolicy.blocked(prefs,pkg,3999));
+        assertFalse(GuardPolicy.blocked(prefs,pkg,4000));
+        assertTrue(GuardPolicy.isEssential(InstrumentationRegistry.getInstrumentation().getTargetContext(),"com.android.settings"));
+    }
+
 }

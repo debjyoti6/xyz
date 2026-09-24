@@ -1,0 +1,3 @@
+<resources>
+    <string name="guard_description">Optional distraction controls. Quiet observes app-switch events to time only the apps you select, and returns you home during focus blocks or after a session limit. It does not read screen content, messages, passwords or browsing history, and sends no data anywhere. Disable this service here at any time.</string>
+</resources>
