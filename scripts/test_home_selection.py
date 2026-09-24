@@ -36,7 +36,19 @@ try:
         button=next((n for n in root.iter('node') if n.get('text') in ('Choose default home app','Set Quiet as your home screen')),None)
     assert button is not None,'Home setup button was not visible'
     tap(button); time.sleep(2)
+    root=dump('03-setup')
+    request=next((n for n in root.iter('node') if n.get('text')=='Choose Quiet as default Home'),None)
+    assert request is not None,'Dedicated Home setup did not open'
+    tap(request); time.sleep(2)
     root=dump('03-system-chooser')
+    assert external_quiet(root) is not None,'Quiet missing from chooser before cancellation'
+    adb('shell','input','keyevent','KEYCODE_BACK'); time.sleep(1)
+    root=dump('03-cancelled')
+    assert PKG+'/' not in default(),'Cancelling must not change default Home'
+    request=next((n for n in root.iter('node') if n.get('text')=='Choose Quiet as default Home'),None)
+    assert request is not None,'Cannot retry after cancelling chooser'
+    tap(request); time.sleep(2)
+    root=dump('03-retry-chooser')
     choice=external_quiet(root)
     assert choice is not None,'Android did not show Quiet as a selectable HOME app'
     tap(choice); time.sleep(.7)
@@ -54,8 +66,7 @@ try:
     root=dump('06-home-from-settings')
     assert PKG+'/' in default()
     assert any(n.get('package')==PKG for n in root.iter('node'))
-    result={'status':'passed','sdk':adb('shell','getprop','ro.build.version.sdk'),'home':default(),
-            'role_holders':adb('shell','cmd','role','get-role-holders','android.app.role.HOME')}
+    result={'status':'passed','sdk':adb('shell','getprop','ro.build.version.sdk'),'home':default()}
     (OUT/'result.json').write_text(json.dumps(result,indent=2));print(result)
 except Exception:
     try: dump('failure')

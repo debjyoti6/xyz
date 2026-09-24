@@ -2,7 +2,6 @@ package com.quiet.launcher;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.app.role.RoleManager;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
@@ -379,33 +378,11 @@ public final class MainActivity extends Activity {
         catch (android.content.ActivityNotFoundException | SecurityException e) { toast("Unable to open. The app may be unavailable or restricted by Android."); loadApps(); }
     }
     private void toast(String s) { Toast.makeText(this,s,Toast.LENGTH_LONG).show(); }
-    private boolean isDefaultHome() {
-        RoleManager rm=getSystemService(RoleManager.class); return rm!=null && rm.isRoleHeld(RoleManager.ROLE_HOME);
-    }
-    private void defaultHome() {
-        RoleManager rm=getSystemService(RoleManager.class);
-        if(rm!=null && rm.isRoleAvailable(RoleManager.ROLE_HOME) && !rm.isRoleHeld(RoleManager.ROLE_HOME)) {
-            try { startActivityForResult(rm.createRequestRoleIntent(RoleManager.ROLE_HOME), 100); return; }
-            catch (RuntimeException ignored) { /* OEM fallback below */ }
-        }
-        openHomeSettings();
-    }
+    private boolean isDefaultHome() { return HomeSetupActivity.isDefault(this); }
+    private void defaultHome() { safeStart(new Intent(this,HomeSetupActivity.class)); }
     private void openHomeSettings() {
         try { startActivity(new Intent(Settings.ACTION_HOME_SETTINGS)); }
-        catch (RuntimeException e) {
-            try { startActivity(new Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)); }
-            catch (RuntimeException ignored) { safeStart(new Intent(Settings.ACTION_SETTINGS)); }
-        }
-    }
-    @Override protected void onActivityResult(int request, int result, Intent data) {
-        super.onActivityResult(request, result, data);
-        if (request == 100) {
-            if (isDefaultHome()) { prefs.edit().putBoolean("welcomed",true).apply(); home(); toast("Quiet is your home screen."); }
-            else dialog().setTitle("Choose Quiet in Android settings")
-                .setMessage("Open Home app settings, then select Quiet Launcher. You can switch back at any time.")
-                .setPositiveButton("Open Home settings",(d,w)->openHomeSettings())
-                .setNegativeButton("Later",null).show();
-        }
+        catch(RuntimeException e) { defaultHome(); }
     }
     private boolean guarded(String pkg) {
         return prefs.getStringSet("guarded",Collections.emptySet()).contains(pkg);
@@ -480,7 +457,7 @@ public final class MainActivity extends Activity {
         body.addView(action("Remove all opening pauses",()->{paused.clear();prefs.edit().putStringSet("paused",new HashSet<>(paused)).apply();toast("Opening pauses removed.");}));
         body.addView(action("Android settings",()->safeStart(new Intent(Settings.ACTION_SETTINGS))));
         body.addView(action("Help & privacy",()->dialog().setTitle("Your phone, your choice")
-            .setMessage("Hold an app to rename, favorite, hide, or add an opening pause.\n\nTo switch back, open Android Settings → Apps → Default apps → Home app.\n\nPauses work only for apps opened from Quiet. Hidden apps remain accessible outside Quiet. Enable Scroll Guard in Focus controls to apply selected-app blocks outside Quiet too.\n\nOffline. No ads, account or analytics. Scroll Guard is optional and requires Accessibility access. It sees app-switch events only, never screen content. Preferences stay on this device; Android backup is disabled.\n\nVersion 1.2 · Android 12+ · Personal profile only. Work profiles, Private Space, widgets, notification filtering are not included.")
+            .setMessage("Hold an app to rename, favorite, hide, or add an opening pause.\n\nTo switch back, open Android Settings → Apps → Default apps → Home app.\n\nPauses work only for apps opened from Quiet. Hidden apps remain accessible outside Quiet. Enable Scroll Guard in Focus controls to apply selected-app blocks outside Quiet too.\n\nOffline. No ads, account or analytics. Scroll Guard is optional and requires Accessibility access. It sees app-switch events only, never screen content. Preferences stay on this device; Android backup is disabled.\n\nVersion 1.3 · Android 12+ · Personal profile only. Work profiles, Private Space, widgets, notification filtering are not included.")
             .setPositiveButton("Got it",null).show()));
     }
 }
