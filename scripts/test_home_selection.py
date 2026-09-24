@@ -42,7 +42,9 @@ try:
     tap(request); time.sleep(2)
     root=dump('03-system-chooser')
     assert external_quiet(root) is not None,'Quiet missing from chooser before cancellation'
-    adb('shell','input','keyevent','KEYCODE_BACK'); time.sleep(1)
+    cancel=next((n for n in root.iter('node') if n.get('package')!=PKG and n.get('text','').lower()=='cancel'),None)
+    assert cancel is not None,'System chooser has no Cancel button'
+    tap(cancel); time.sleep(1)
     root=dump('03-cancelled')
     assert PKG+'/' not in default(),'Cancelling must not change default Home'
     request=next((n for n in root.iter('node') if n.get('text')=='Choose Quiet as default Home'),None)

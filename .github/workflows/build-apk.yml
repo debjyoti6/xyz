@@ -10,6 +10,8 @@ concurrency:
   cancel-in-progress: true
 jobs:
   build:
+    env:
+      QUIET_SIGNING_STORE: ${{ github.workspace }}/ci-signing/debug.keystore
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -27,8 +29,14 @@ jobs:
       - run: sdkmanager 'platforms;android-35' 'build-tools;34.0.0'
       - uses: actions/cache@v4
         with:
-          path: ~/.android/debug.keystore
-          key: quiet-debug-signing-v1
+          path: ci-signing/debug.keystore
+          key: quiet-debug-signing-explicit-v2
+      - name: Ensure persistent debug signing key exists
+        run: |
+          mkdir -p ci-signing
+          if [ ! -f "$QUIET_SIGNING_STORE" ]; then
+            keytool -genkeypair -keystore "$QUIET_SIGNING_STORE" -storepass android -alias androiddebugkey -keypass android -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -keysize 2048 -validity 10000
+          fi
       - run: gradle --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug
       - uses: actions/upload-artifact@v4
         with:
