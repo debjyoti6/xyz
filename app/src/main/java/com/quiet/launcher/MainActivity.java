@@ -40,7 +40,8 @@ public final class MainActivity extends Activity {
     private final ArrayList<App> apps = new ArrayList<>();
     private final ArrayList<String> favorites = new ArrayList<>();
     private Set<String> paused, hidden;
-    private LinearLayout root;
+    private LinearLayout root, favoriteRows;
+    private boolean renderedDefaultHome;
     private boolean light, started, loaded;
     private int fg, muted, bg, accent;
     private String screen = "home";
@@ -101,7 +102,7 @@ public final class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(packagesChanged, f, Context.RECEIVER_NOT_EXPORTED);
         else registerReceiver(packagesChanged, f);
     }
-    @Override protected void onResume() { super.onResume(); if ("focus".equals(screen)) focusSettings(); loadApps(); }
+    @Override protected void onResume() { super.onResume(); if ("focus".equals(screen)) focusSettings(); else if ("home".equals(screen) && renderedDefaultHome!=isDefaultHome()) home(); loadApps(); }
     @Override protected void onPause() { cancelPause(); super.onPause(); }
     @Override protected void onStop() {
         if (started) { unregisterReceiver(packagesChanged); started = false; }
@@ -135,7 +136,7 @@ public final class MainActivity extends Activity {
                 if (isDestroyed() || generation != loadGeneration) return;
                 apps.clear(); apps.addAll(result); loaded = true; sortApps();
                 if ("apps".equals(screen) && search != null) filter(search.getText().toString());
-                else if ("home".equals(screen)) home();
+                else if ("home".equals(screen)) renderFavorites();
             });
         });
     }
@@ -170,7 +171,7 @@ public final class MainActivity extends Activity {
         LinearLayout body = column(); scroll.addView(body); root.addView(scroll,new LinearLayout.LayoutParams(-1,-1)); return body;
     }
     private void frame(String next) {
-        screen = next; search = null; adapter = null; emptyMessage = null;
+        screen = next; favoriteRows = null; search = null; adapter = null; emptyMessage = null;
         light = prefs.getBoolean("light", false);
         bg = Color.parseColor(light ? "#F7F5EF" : "#000000");
         fg = Color.parseColor(light ? "#202020" : "#F5F5F2");
@@ -208,24 +209,30 @@ public final class MainActivity extends Activity {
         clock.setPadding(0,dp(18),0,0); body.addView(clock);
         TextClock date = new TextClock(this); date.setFormat12Hour("EEE, d MMM"); date.setFormat24Hour("EEE, d MMM");
         date.setTextColor(muted); date.setTextSize(17); body.addView(date); gap(body,24);
-        if (!isDefaultHome()) body.addView(action("Set Quiet as your home screen",this::defaultHome));
+        renderedDefaultHome=isDefaultHome();
+        if (!renderedDefaultHome) body.addView(action("Set Quiet as your home screen",this::defaultHome));
         View breathingRoom = new View(this);
         body.addView(breathingRoom,new LinearLayout.LayoutParams(1,dp(24),1));
+        favoriteRows=column(); body.addView(favoriteRows); renderFavorites();
+        gap(body,26);
+        TextView all = action("All apps  →",this::allApps); all.setId(R.id.all_apps); body.addView(all);
+        TextView focus=action(prefs.getLong("focusUntil",0)>System.currentTimeMillis()?"Focus is active · controls":"Focus & Scroll Guard",this::focusSettings); body.addView(focus);
+        TextView settings = action("Preferences",this::settings); settings.setId(R.id.preferences); body.addView(settings);
+    }
+    private void renderFavorites() {
+        if(favoriteRows==null) return;
+        favoriteRows.removeAllViews();
         int shown=0;
         for (String id : favorites) {
             App a = find(id); if (a == null || hidden.contains(id)) continue; shown++;
             TextView row = action(label(a),() -> launch(a)); row.setTextSize(appTextSize());
             row.setContentDescription(label(a)+", favorite");
-            row.setOnLongClickListener(v -> { options(a); return true; }); body.addView(row);
+            row.setOnLongClickListener(v -> { options(a); return true; }); favoriteRows.addView(row);
         }
         if (shown == 0) {
-            body.addView(text(loaded ? "Choose your essentials." : "Loading your apps…",24,fg));
-            if (loaded) body.addView(action("Add favorite apps",this::allApps));
+            favoriteRows.addView(text(loaded ? "Choose your essentials." : "Loading your apps…",24,fg));
+            if (loaded) favoriteRows.addView(action("Add favorite apps",this::allApps));
         }
-        gap(body,26);
-        TextView all = action("All apps  →",this::allApps); all.setId(R.id.all_apps); body.addView(all);
-        TextView focus=action(prefs.getLong("focusUntil",0)>System.currentTimeMillis()?"Focus is active · controls":"Focus & Scroll Guard",this::focusSettings); body.addView(focus);
-        TextView settings = action("Preferences",this::settings); settings.setId(R.id.preferences); body.addView(settings);
     }
     private App find(String id) { for (App a: apps) if (a.id.equals(id)) return a; return null; }
     private void saveFavorites() { prefs.edit().putString("favorites",new JSONArray(favorites).toString()).apply(); }
