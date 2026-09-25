@@ -78,6 +78,9 @@ public final class MainActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         prefs = getSharedPreferences("quiet", MODE_PRIVATE);
+        // Android can finish HomeSetupActivity when it brings this singleTask Home forward.
+        // Record successful setup here too, so recreation never returns to onboarding.
+        if (isDefaultHome()) prefs.edit().putBoolean("welcomed", true).apply();
         light = prefs.getBoolean("light", false);
         paused = new HashSet<>(prefs.getStringSet("paused", Collections.emptySet()));
         hidden = new HashSet<>(prefs.getStringSet("hidden", Collections.emptySet()));
@@ -123,7 +126,11 @@ public final class MainActivity extends Activity {
         super.onStop();
     }
     @Override protected void onDestroy() { loadGeneration++; uiHandler.removeCallbacksAndMessages(null); loader.shutdownNow(); super.onDestroy(); }
-    @Override protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); home(); }
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent); setIntent(intent);
+        if (isDefaultHome()) prefs.edit().putBoolean("welcomed", true).apply();
+        home();
+    }
     @Override public void onBackPressed() { home(); }
 
     /** Package queries stay off the UI thread. Only the newest result is applied. */
