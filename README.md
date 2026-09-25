@@ -1,4 +1,4 @@
-# Quiet Launcher 1.4 — Android 12+
+# Quiet Launcher 1.4 — Android 11+
 
 Native, offline text launcher with favorites, search, rename/hide, opening pauses and focus sessions.
 
@@ -14,6 +14,6 @@ Choose distracting apps under Focus controls. Start a 15/25/45/60-minute focus s
 No requested permissions, Accessibility service, notification listener, network, analytics, ads or account. Preferences stay on the device; backup is disabled. Phone, Settings and the current default Home app are excluded from focus blocks. Personal profile only; work profiles, Private Space, widgets and notification filtering are not implemented.
 
 ## Build and validation
-Java 17, Gradle 8.9, SDK 35. CI builds a non-debuggable release, verifies its APK signature and packaged manifest, and runs lint. Android 12 and 15 emulator checks run six instrumentation tests, then install the actual release artifact and exercise the real HOME chooser, cancellation/retry and Home-button behavior. Emulator tests do not verify Play Protect acceptance on a physical phone.
+Java 17, Gradle 8.9, SDK 35. CI builds a non-debuggable release, verifies its APK signature and packaged manifest, and runs lint. Android 11, 12 and 15 emulator checks run six instrumentation tests, then install the actual release artifact and exercise the real HOME chooser, cancellation/retry and Home-button behavior. Emulator tests do not verify Play Protect acceptance on a physical phone.
 
 CI uses the same cached development signing key as v1.3 to permit updates. This is a personal test distribution, not a Play Store release. Cache loss can change the signer; an update conflict then requires uninstalling the previous build, which clears Quiet's preferences. For local release signing supply QUIET_SIGNING_STORE pointing to an Android debug-format keystore, or configure your own signing credentials.

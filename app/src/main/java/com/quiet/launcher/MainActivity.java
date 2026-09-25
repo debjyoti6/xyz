@@ -33,7 +33,7 @@ import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Native launcher with an optional, explicitly enabled distraction guard. */
+/** Native launcher with local focus controls and no background monitoring. */
 public final class MainActivity extends Activity {
     private SharedPreferences prefs;
     private final ArrayList<App> apps = new ArrayList<>();
@@ -196,7 +196,7 @@ public final class MainActivity extends Activity {
         frame("welcome"); LinearLayout body = scrollingBody(); gap(body,40);
         body.addView(text("Quiet Launcher",36,fg)); gap(body,24);
         body.addView(text("Make room for what matters.",24,fg)); gap(body,18);
-        body.addView(text("A simple home screen for Android 12 and newer. Choose favorite apps, reduce visual clutter, and add a pause before opening distractions.\n\nYour apps and files stay on your phone. You can switch back to your previous launcher in Android settings at any time.",18,muted));
+        body.addView(text("A simple home screen for Android 11 and newer. Choose favorite apps, reduce visual clutter, and add a pause before opening distractions.\n\nYour apps and files stay on your phone. You can switch back to your previous launcher in Android settings at any time.",18,muted));
         gap(body,24); body.addView(action("Start using Quiet",()->{prefs.edit().putBoolean("welcomed",true).apply();home();}));
         body.addView(action("Choose default home app",this::defaultHome));
     }
@@ -446,7 +446,7 @@ public final class MainActivity extends Activity {
         body.addView(action("Remove all opening pauses",()->{paused.clear();prefs.edit().putStringSet("paused",new HashSet<>(paused)).apply();toast("Opening pauses removed.");}));
         body.addView(action("Android settings",()->safeStart(new Intent(Settings.ACTION_SETTINGS))));
         body.addView(action("Help & privacy",()->dialog().setTitle("Your phone, your choice")
-            .setMessage("Hold an app to rename, favorite, hide, or add an opening pause.\n\nTo switch back, open Android Settings → Apps → Default apps → Home app.\n\nPauses work only for apps opened from Quiet. Hidden apps remain accessible outside Quiet. Focus blocks apply only to apps launched from Quiet.\n\nOffline. No ads, account or analytics. No Accessibility service, app monitoring, or sensitive permissions. Preferences stay on this device; Android backup is disabled.\n\nVersion 1.4 · Android 12+ · Personal profile only. Work profiles, Private Space, widgets, notification filtering are not included.")
+            .setMessage("Hold an app to rename, favorite, hide, or add an opening pause.\n\nTo switch back, open Android Settings → Apps → Default apps → Home app.\n\nPauses work only for apps opened from Quiet. Hidden apps remain accessible outside Quiet. Focus blocks apply only to apps launched from Quiet.\n\nOffline. No ads, account or analytics. No Accessibility service, app monitoring, or sensitive permissions. Preferences stay on this device; Android backup is disabled.\n\nVersion 1.4 · Android 11+ · Personal profile only. Work profiles, Private Space, widgets, notification filtering are not included.")
             .setPositiveButton("Got it",null).show()));
     }
 }

@@ -8,6 +8,6 @@ assert app.get(a+'debuggable','false')=='false', 'Release must not be debuggable
 assert not list(root.iter('service')), 'No background/accessibility services allowed'
 assert not [n for n in root if n.tag.startswith('uses-permission')], 'No requested permissions allowed'
 assert root.get('package')=='com.quiet.launcher'
-assert root.find('uses-sdk').get(a+'minSdkVersion')=='31'
+assert root.find('uses-sdk').get(a+'minSdkVersion')=='30'
 assert any(n.get(a+'name')=='android.intent.category.HOME' for n in root.iter('category'))
 print('PASS: signed release manifest has no services or requested permissions; HOME registration present.')
