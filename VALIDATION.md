@@ -1,19 +1,18 @@
-# Version 1.1 validation
+# Quiet Launcher 1.5 validation — 25 September 2026
 
-## Completed locally
-- Parsed every Android XML resource and manifest successfully.
-- Parsed the GitHub workflow YAML and confirmed Android API matrix 31–36.
-- Confirmed minSdk 31 (Android 12), exported home activity, HOME/DEFAULT/LAUNCHER intent categories, and no declared permissions.
-- Reviewed source lifecycle handling, background loading, persisted preferences, hide/restore recovery, and opening-pause cancellation.
-- Checked final source ZIP CRC integrity.
+Tested app commit: 62265434880dcaa3e41ebe9d5d1bb11897f9626b.
+Workflow: https://github.com/debjyoti6/xyz/actions/runs/36131113388
 
-## Prepared, not executed
-- APK compilation and Android Lint.
-- Instrumentation test compilation.
-- Four UI acceptance tests across Android 12, 12L, 13, 14, 15, and 16 emulators.
+## Passed
+- Optimized personal-test APK build, unsigned release AAB build and release lint.
+- APK signing verification, no requested permissions or services, non-debuggable build, backup disabled, min API30 / target API36.
+- Nine instrumentation checks on each API30–36 emulator (63 executions): favorites after recreation, hide/restore, rename/search, opening-pause cancellation, HOME registration, focus selection/expiry, clock-change stability, bounded reboot/legacy recovery, and visible expiry status.
+- Installed the actual optimized APK on each emulator; selected HOME through Android's UI, cancelled/retried the chooser, confirmed system resolution, and pressed Home both directly and from Settings.
+- Optimized APK app-list/search checks, 150% font scale, activity recreation and landscape rendering on each API30–36 emulator.
+- Fixed the actual onboarding regression found by the font-scale test: completed default-Home setup now persists from the singleTask launcher too.
+- Examined Android11 large-font and landscape captures. Store screenshots are genuine captures.
+- APK: 50,104 bytes, SHA256 7c95aa86c7905314fdb62de30667c54f9bc01da9a5a3289254d1c49b05309a1f. Same development signing certificate as v1.4.
+- Release AAB: 35,741 bytes, ZIP integrity valid, unsigned as intended, no native libraries.
 
-## Build blocker
-The execution environment has no Android SDK, Gradle, Java compiler, or emulator. The Android SDK download timed out. The connected GitHub account has no dedicated launcher repository, and the browser is signed out. No external repository was modified. Provide a dedicated repository URL, initialized with a README and accessible to the GitHub connection, to continue with a cloud build.
-
-## Not claimed
-No APK has been produced. No Android runtime test has passed here. No claim of universal device compatibility or daily-use readiness is made. A successful emulator matrix must be followed by testing on the intended physical phone. Features and exclusions are documented in README.md.
+## Still required before public release
+Physical OEM phones, Play-generated install/update testing, completing and hosting the privacy policy, eligible publisher/account setup, private upload-key signing, accurate store declarations, account-specific closed testing and Play review. No claim of universal device compatibility, Play Protect acceptance or Play Store approval. The sideload APK is a personal-test artifact; do not submit its development key as your Play release key.
