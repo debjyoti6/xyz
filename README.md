@@ -1,19 +1,25 @@
-# Quiet Launcher 1.4 — Android 11+
+# Quiet Launcher 1.5 — Android 11+
 
-Native, offline text launcher with favorites, search, rename/hide, opening pauses and focus sessions.
+A lightweight, native Java launcher: favorites, search, rename/hide, opening pauses, focus sessions, text sizing and light/dark appearance. No runtime dependencies, ads, network, accounts, Accessibility service, background service or requested permissions.
 
-## Install and choose Home
-Install the APK, open Quiet, tap Choose default home app, then Choose Quiet as default Home. Select Quiet Launcher in Android and confirm. Press Home. The setup screen also offers Android Home settings and Copy setup details for troubleshooting.
+## Setup
+Install the personal-test APK, open Quiet, choose default Home, select Quiet in Android's dialog and confirm. Press Home. Use Home app setup / Android Home settings if needed; Copy setup details helps diagnose device-specific failures. Keep Play Protect enabled and share an exact error if Android blocks installation.
 
-Version 1.4 removes Scroll Guard and its Accessibility service entirely. Google Play Protect can block internet-sideloaded apps with sensitive access in some markets. This is a potential cause of earlier installation problems, not a confirmed diagnosis on the user's phone. Keep Play Protect enabled; allow a requested app scan. If blocked, share the exact warning and phone model rather than disabling device protection.
+## Reliability changes
+- Monotonic focus timing survives activity/process recreation and clock changes within a boot; reboot recovery uses a bounded wall-clock fallback. The session remains voluntary and can be ended early.
+- Countdown/expiry labels update in place only while the activity is foregrounded.
+- Phone, Settings and the current system Home resolve as essential and bypass pauses/blocks.
+- App queries run off the UI thread; obsolete queued queries are cancelled, stale results are ignored, and a disappearing app label cannot abort the entire list.
+- Clicks guard against app-list changes. Home setup avoids misleading change-default labels. Adaptive and themed icons support system shapes.
+- API36 target, API30 minimum. No architecture-specific native libraries.
 
-## Focus and limits
-Choose distracting apps under Focus controls. Start a 15/25/45/60-minute focus session. Selected apps are blocked when opened from Quiet during focus and get an opening pause outside focus. Focus can be ended early. Notifications, links, Recents and other launchers can still open these apps. Use Android Digital Wellbeing for system app timers. Quiet cannot monitor scrolling, close other apps, or detect Reels/Shorts.
+Focus blocks apply only to launches through Quiet; notifications, links and Recents can still open apps. Hidden apps remain installed. Personal profile only; no work-profile or Private Space browser, widgets or notification filtering. No promise of compatibility on every manufacturer or future Android version.
 
-## Privacy
-No requested permissions, Accessibility service, notification listener, network, analytics, ads or account. Preferences stay on the device; backup is disabled. Phone, Settings and the current default Home app are excluded from focus blocks. Personal profile only; work profiles, Private Space, widgets and notification filtering are not implemented.
+## Build
+Java 17, Gradle 8.11.1, SDK36, build tools35.0.0; AGP8.10.1.
+- `gradle :app:assembleSideload :app:bundleRelease :app:lintRelease`
+- `gradle :app:connectedDebugAndroidTest`
 
-## Build and validation
-Java 17, Gradle 8.9, SDK 35. CI builds a non-debuggable release, verifies its APK signature and packaged manifest, and runs lint. Android 11, 12 and 15 emulator checks run six instrumentation tests, then install the actual release artifact and exercise the real HOME chooser, cancellation/retry and Home-button behavior. Emulator tests do not verify Play Protect acceptance on a physical phone.
+`sideload` is an optimized non-debuggable personal-test APK signed with the cached development key, compatible with the previous development signer while that cache persists. `release` produces an unsigned AAB unless private upload-key environment variables are supplied. A development-signed APK is not the Play submission artifact.
 
-CI uses the same cached development signing key as v1.3 to permit updates. This is a personal test distribution, not a Play Store release. Cache loss can change the signer; an update conflict then requires uninstalling the previous build, which clears Quiet's preferences. For local release signing supply QUIET_SIGNING_STORE pointing to an Android debug-format keystore, or configure your own signing credentials.
+CI runs instrumentation and actual sideload-APK Home selection on API30–36, with reports and screenshots. Device testing and Play release work remain necessary. See docs/PLAY_STORE.md for signing, privacy, listing, test and submission steps; docs/PRIVACY_POLICY.md is a policy draft to complete and host.

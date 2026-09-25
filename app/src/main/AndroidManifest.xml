@@ -4,7 +4,7 @@
         <intent><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.HOME"/></intent>
         <intent><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent>
     </queries>
-    <application android:label="Quiet Launcher" android:icon="@drawable/ic_quiet" android:theme="@style/AppTheme" android:allowBackup="false" android:supportsRtl="true">
+    <application android:label="Quiet Launcher" android:icon="@mipmap/ic_quiet" android:roundIcon="@mipmap/ic_quiet" android:theme="@style/AppTheme" android:allowBackup="false" android:supportsRtl="true">
         <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTask" android:enableOnBackInvokedCallback="true" android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>

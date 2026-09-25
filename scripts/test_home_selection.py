@@ -68,6 +68,38 @@ try:
     root=dump('06-home-from-settings')
     assert PKG+'/' in default()
     assert any(n.get('package')==PKG for n in root.iter('node'))
+    # Exercise the optimized APK as delivered, including list rendering and search.
+    def find_text(value, name):
+        for attempt in range(5):
+            root=dump(name+'-'+str(attempt))
+            node=next((n for n in root.iter('node') if n.get('text')==value),None)
+            if node is not None: return node
+            bounds=list(map(int,re.findall(r'\d+',next(root.iter('node')).get('bounds'))))
+            width,height=bounds[2],bounds[3]
+            adb('shell','input','swipe',str(width//2),str(height*4//5),str(width//2),str(height//4),'300')
+        raise AssertionError('Missing control: '+value)
+    tap(find_text('All apps  →','07-find-apps'));time.sleep(1)
+    root=dump('08-all-apps')
+    search=next((n for n in root.iter('node') if n.get('resource-id')==PKG+':id/search_apps'),None)
+    assert search is not None,'Search missing from optimized APK'
+    tap(search);adb('shell','input','text','zzzz-unmatched-app');time.sleep(.5)
+    root=dump('09-search-empty')
+    assert any(n.get('text','').startswith('No matching apps') for n in root.iter('node'))
+    adb('shell','input','keyevent','KEYCODE_HOME');time.sleep(1)
+    try:
+        adb('shell','settings','put','system','font_scale','1.5');time.sleep(2)
+        tap(find_text('All apps  →','10-large-font'))
+        root=dump('11-large-font-apps')
+        assert any(n.get('resource-id')==PKG+':id/search_apps' for n in root.iter('node'))
+        adb('shell','settings','put','system','accelerometer_rotation','0')
+        adb('shell','settings','put','system','user_rotation','1');time.sleep(2)
+        root=dump('12-landscape')
+        assert any(n.get('resource-id')==PKG+':id/search_apps' for n in root.iter('node'))
+        assert PKG+'/' in default()
+    finally:
+        adb('shell','settings','put','system','font_scale','1.0')
+        adb('shell','settings','put','system','user_rotation','0')
+        adb('shell','settings','put','system','accelerometer_rotation','1')
     result={'status':'passed','sdk':adb('shell','getprop','ro.build.version.sdk'),'home':default()}
     (OUT/'result.json').write_text(json.dumps(result,indent=2));print(result)
 except Exception:

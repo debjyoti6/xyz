@@ -5,3 +5,7 @@ local.properties
 *.iml
 
 ci-signing/
+
+*.jks
+*.keystore
+keystore.properties

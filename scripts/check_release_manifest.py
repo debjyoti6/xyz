@@ -9,5 +9,7 @@ assert not list(root.iter('service')), 'No background/accessibility services all
 assert not [n for n in root if n.tag.startswith('uses-permission')], 'No requested permissions allowed'
 assert root.get('package')=='com.quiet.launcher'
 assert root.find('uses-sdk').get(a+'minSdkVersion')=='30'
+assert root.find('uses-sdk').get(a+'targetSdkVersion')=='36'
+assert app.get(a+'allowBackup')=='false'
 assert any(n.get(a+'name')=='android.intent.category.HOME' for n in root.iter('category'))
 print('PASS: signed release manifest has no services or requested permissions; HOME registration present.')

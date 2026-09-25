@@ -5,4 +5,6 @@
     <item name="app_list" type="id"/>
     <item name="empty_apps" type="id"/>
     <item name="hidden_apps" type="id"/>
+    <item name="focus_controls" type="id"/>
+    <item name="focus_status" type="id"/>
 </resources>

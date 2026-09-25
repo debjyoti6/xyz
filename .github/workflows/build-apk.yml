@@ -25,8 +25,8 @@ jobs:
           packages: platform-tools
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.9'
-      - run: sdkmanager 'platforms;android-35' 'build-tools;34.0.0'
+          gradle-version: '8.11.1'
+      - run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
       - uses: actions/cache@v4
         with:
           path: ci-signing/debug.keystore
@@ -37,23 +37,30 @@ jobs:
           if [ ! -f "$QUIET_SIGNING_STORE" ]; then
             keytool -genkeypair -keystore "$QUIET_SIGNING_STORE" -storepass android -alias androiddebugkey -keypass android -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -keysize 2048 -validity 10000
           fi
-      - run: gradle --no-daemon :app:assembleRelease :app:assembleDebugAndroidTest :app:lintRelease
+      - run: gradle --no-daemon :app:assembleSideload :app:bundleRelease :app:assembleDebugAndroidTest :app:lintRelease
       - name: Verify delivered APK signature and permission surface
         run: |
           mkdir -p app/build/reports/release-checks
-          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk > app/build/reports/release-checks/signature.txt
-          apkanalyzer manifest print app/build/outputs/apk/release/app-release.apk > app/build/reports/release-checks/manifest.xml
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs app/build/outputs/apk/sideload/app-sideload.apk > app/build/reports/release-checks/signature.txt
+          apkanalyzer manifest print app/build/outputs/apk/sideload/app-sideload.apk > app/build/reports/release-checks/manifest.xml
           python3 scripts/check_release_manifest.py app/build/reports/release-checks/manifest.xml
       - uses: actions/upload-artifact@v4
         with:
           name: Quiet-Launcher-APK-built
-          path: app/build/outputs/apk/release/app-release.apk
+          path: app/build/outputs/apk/sideload/app-sideload.apk
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Play-bundle-UNSIGNED-sign-before-upload
+          path: app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: Build-reports
-          path: app/build/reports/
+          path: |
+            app/build/reports/
+            app/build/outputs/mapping/
   compatibility:
     needs: build
     runs-on: ubuntu-latest
@@ -62,7 +69,7 @@ jobs:
       fail-fast: false
       max-parallel: 6
       matrix:
-        api: [30, 31, 35]
+        api: [30, 31, 32, 33, 34, 35, 36]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -74,8 +81,8 @@ jobs:
           packages: platform-tools
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.9'
-      - run: sdkmanager 'platforms;android-35' 'build-tools;34.0.0'
+          gradle-version: '8.11.1'
+      - run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
       - name: Allow this disposable runner to use its emulator accelerator
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -95,7 +102,7 @@ jobs:
           script: |
             gradle --no-daemon :app:connectedDebugAndroidTest
             if adb shell pm list packages | grep -qx 'package:com.quiet.launcher'; then adb uninstall com.quiet.launcher; fi
-            adb install tested-apk/app-release.apk
+            adb install tested-apk/app-sideload.apk
             python3 scripts/test_home_selection.py
       - uses: actions/upload-artifact@v4
         if: always()

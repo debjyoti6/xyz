@@ -15,6 +15,8 @@ import android.graphics.Insets;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.CountDownTimer;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 import android.text.Editable;
 import android.text.InputFilter;
@@ -32,6 +34,7 @@ import java.text.Collator;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 /** Native launcher with local focus controls and no background monitoring. */
 public final class MainActivity extends Activity {
@@ -47,7 +50,15 @@ public final class MainActivity extends Activity {
     private CountDownTimer timer;
     private AlertDialog pauseDialog;
     private EditText search;
-    private TextView emptyMessage;
+    private TextView emptyMessage, focusStatus, focusAction, endFocusAction;
+    private final Handler uiHandler = new Handler(Looper.getMainLooper());
+    private final Runnable focusTick = new Runnable() {
+        @Override public void run() {
+            updateFocusStatus();
+            if (FocusSession.remaining(MainActivity.this, prefs) > 0) uiHandler.postDelayed(this, 1000);
+        }
+    };
+    private Future<?> pendingLoad;
     private final ArrayList<App> filtered = new ArrayList<>();
     private BaseAdapter adapter;
     private final ExecutorService loader = Executors.newSingleThreadExecutor();
@@ -101,20 +112,26 @@ public final class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(packagesChanged, f, Context.RECEIVER_NOT_EXPORTED);
         else registerReceiver(packagesChanged, f);
     }
-    @Override protected void onResume() { super.onResume(); if ("focus".equals(screen)) focusSettings(); else if ("home".equals(screen) && renderedDefaultHome!=isDefaultHome()) home(); loadApps(); }
-    @Override protected void onPause() { cancelPause(); super.onPause(); }
+    @Override protected void onResume() {
+        super.onResume();
+        if ("home".equals(screen) && renderedDefaultHome != isDefaultHome()) home();
+        uiHandler.removeCallbacks(focusTick); focusTick.run(); loadApps();
+    }
+    @Override protected void onPause() { uiHandler.removeCallbacks(focusTick); cancelPause(); super.onPause(); }
     @Override protected void onStop() {
         if (started) { unregisterReceiver(packagesChanged); started = false; }
         super.onStop();
     }
-    @Override protected void onDestroy() { loadGeneration++; loader.shutdownNow(); super.onDestroy(); }
+    @Override protected void onDestroy() { loadGeneration++; uiHandler.removeCallbacksAndMessages(null); loader.shutdownNow(); super.onDestroy(); }
     @Override protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); home(); }
     @Override public void onBackPressed() { home(); }
 
     /** Package queries stay off the UI thread. Only the newest result is applied. */
     private void loadApps() {
+        if (isDestroyed() || loader.isShutdown()) return;
         final int generation = ++loadGeneration;
-        loader.execute(() -> {
+        if (pendingLoad != null) pendingLoad.cancel(false);
+        pendingLoad = loader.submit(() -> {
             ArrayList<App> result = new ArrayList<>();
             Intent query = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
             HashSet<String> seen = new HashSet<>();
@@ -124,7 +141,8 @@ public final class MainActivity extends Activity {
                         getPackageName().equals(info.activityInfo.packageName)) continue;
                     ComponentName c = new ComponentName(info.activityInfo.packageName, info.activityInfo.name);
                     if (seen.add(c.flattenToString())) {
-                        result.add(new App(info.loadLabel(getPackageManager()).toString(), c));
+                        try { result.add(new App(info.loadLabel(getPackageManager()).toString(), c)); }
+                        catch (RuntimeException ignored) { /* An app may disappear during the query. */ }
                     }
                 }
             } catch (RuntimeException e) {
@@ -170,7 +188,7 @@ public final class MainActivity extends Activity {
         LinearLayout body = column(); scroll.addView(body); root.addView(scroll,new LinearLayout.LayoutParams(-1,-1)); return body;
     }
     private void frame(String next) {
-        screen = next; favoriteRows = null; search = null; adapter = null; emptyMessage = null;
+        screen = next; focusStatus = null; focusAction = null; endFocusAction = null; favoriteRows = null; search = null; adapter = null; emptyMessage = null;
         light = prefs.getBoolean("light", false);
         bg = Color.parseColor(light ? "#F7F5EF" : "#000000");
         fg = Color.parseColor(light ? "#202020" : "#F5F5F2");
@@ -215,7 +233,7 @@ public final class MainActivity extends Activity {
         favoriteRows=column(); body.addView(favoriteRows); renderFavorites();
         gap(body,26);
         TextView all = action("All apps  →",this::allApps); all.setId(R.id.all_apps); body.addView(all);
-        TextView focus=action(prefs.getLong("focusUntil",0)>System.currentTimeMillis()?"Focus is active · controls":"Focus controls",this::focusSettings); body.addView(focus);
+        focusAction=action("Focus controls",this::focusSettings); focusAction.setId(R.id.focus_controls); body.addView(focusAction); updateFocusStatus();
         TextView settings = action("Preferences",this::settings); settings.setId(R.id.preferences); body.addView(settings);
     }
     private void renderFavorites() {
@@ -265,8 +283,8 @@ public final class MainActivity extends Activity {
         };
         list.setAdapter(adapter); root.addView(list,new LinearLayout.LayoutParams(-1,0,1));
         emptyMessage = text("",18,muted); emptyMessage.setId(R.id.empty_apps); root.addView(emptyMessage); list.setEmptyView(emptyMessage);
-        list.setOnItemClickListener((p,v,pos,id) -> launch(filtered.get(pos)));
-        list.setOnItemLongClickListener((p,v,pos,id) -> { closeKeyboard(); options(filtered.get(pos)); return true; });
+        list.setOnItemClickListener((p,v,pos,id) -> { if(pos>=0 && pos<filtered.size()) launch(filtered.get(pos)); });
+        list.setOnItemLongClickListener((p,v,pos,id) -> { if(pos<0 || pos>=filtered.size()) return false; closeKeyboard(); options(filtered.get(pos)); return true; });
         search.addTextChangedListener(new TextWatcher() {
             public void beforeTextChanged(CharSequence s,int st,int count,int after) {}
             public void onTextChanged(CharSequence s,int st,int before,int count) { filter(s.toString()); }
@@ -346,13 +364,12 @@ public final class MainActivity extends Activity {
     private void launch(App app) {
         closeKeyboard();
         String pkg=app.component.getPackageName();
-        if(guarded(pkg) && !GuardPolicy.isEssential(this,pkg)) {
-            long now=System.currentTimeMillis();
-            if(GuardPolicy.blocked(prefs, pkg, now)) {
-                dialog().setTitle("Take this time back")
-                    .setMessage(prefs.getLong("focusUntil",0)>now ? "This app is paused during your focus session." : "Take a one-minute break before opening this app again.")
-                    .setPositiveButton("Stay focused",null).setNeutralButton("Focus controls",(d,w)->focusSettings()).show();return;
-            }
+        // Essential apps always open immediately, even if selected in older preferences.
+        if (GuardPolicy.isEssential(this,pkg)) { openApp(app); return; }
+        if (GuardPolicy.blocked(prefs, pkg, FocusSession.remaining(this,prefs))) {
+            dialog().setTitle("Take this time back")
+                .setMessage("This app is paused during your focus session.")
+                .setPositiveButton("Stay focused",null).setNeutralButton("Focus controls",(d,w)->focusSettings()).show();return;
         }
         if(!paused.contains(app.id) && !guarded(pkg)) { openApp(app); return; }
         cancelPause(); int seconds=pauseSeconds();
@@ -408,16 +425,14 @@ public final class MainActivity extends Activity {
             if(prefs.getStringSet("guarded",Collections.emptySet()).isEmpty()) {chooseDistractions();return;}
             int[] minutes={15,25,45,60}; String[] names={"15 minutes","25 minutes","45 minutes","60 minutes"};
             dialog().setTitle("How long do you want to focus?").setItems(names,(d,i)->{
-                prefs.edit().putLong("focusUntil",System.currentTimeMillis()+minutes[i]*60000L).apply();home();
+                FocusSession.start(this,prefs,minutes[i]); home(); uiHandler.removeCallbacks(focusTick); focusTick.run();
             }).show();
         }));
-        long left=prefs.getLong("focusUntil",0)-System.currentTimeMillis();
-        if(left>0) {
-            body.addView(text("Focus active · about "+((left+59999)/60000)+" minutes left",18,fg));
-            body.addView(action("End focus session",()->dialog().setTitle("End focus early?")
-                .setMessage("Your selected apps will become available again.").setNegativeButton("Keep focusing",null)
-                .setPositiveButton("End session",(d,w)->{prefs.edit().remove("focusUntil").apply();focusSettings();}).show()));
-        }
+        focusStatus=text("",18,fg); focusStatus.setId(R.id.focus_status); body.addView(focusStatus);
+        endFocusAction=action("End focus session",()->dialog().setTitle("End focus early?")
+            .setMessage("Your selected apps will become available again.").setNegativeButton("Keep focusing",null)
+            .setPositiveButton("End session",(d,w)->{FocusSession.end(prefs);updateFocusStatus();}).show());
+        body.addView(endFocusAction);updateFocusStatus();
         body.addView(text("Focus applies only to apps opened from Quiet. This version has no Accessibility service and cannot close other apps or monitor your scrolling. Use Android Digital Wellbeing for system app timers.",16,muted));
         body.addView(action("Android Digital Wellbeing",()->{
             try { startActivity(new Intent("android.settings.WELLBEING_SETTINGS")); }
@@ -425,10 +440,18 @@ public final class MainActivity extends Activity {
         }));
         body.addView(text("Phone, Settings and your default home app are excluded. Focus can always be ended here. These controls do not block apps opened from notifications, links or Recents.",15,muted));
     }
+    private void updateFocusStatus() {
+        long remaining = FocusSession.remaining(this,prefs);
+        long seconds = (remaining + 999) / 1000;
+        String countdown = String.format(Locale.getDefault(), "%d:%02d", seconds / 60, seconds % 60);
+        if (focusAction != null) focusAction.setText(remaining > 0 ? "Focus · " + countdown + " left" : "Focus controls");
+        if (focusStatus != null) focusStatus.setText(remaining > 0 ? "Focus active · " + countdown + " left" : "No active focus session");
+        if (endFocusAction != null) endFocusAction.setVisibility(remaining > 0 ? View.VISIBLE : View.GONE);
+    }
     private void settings() {
         closeKeyboard(); frame("settings"); LinearLayout body=scrollingBody();
         body.addView(action("←  Home",this::home)); body.addView(text("Preferences",32,fg)); gap(body,18);
-        body.addView(action(isDefaultHome()?"Change default home app":"Set as default home",this::defaultHome));
+        body.addView(action("Home app setup",this::defaultHome));
         body.addView(action("Open Android Home app settings",this::openHomeSettings));
         body.addView(action("Focus controls",this::focusSettings));
         body.addView(action(light?"Appearance: Paper":"Appearance: Black",()->{prefs.edit().putBoolean("light",!light).apply();settings();}));
@@ -443,10 +466,10 @@ public final class MainActivity extends Activity {
         body.addView(action("Choose favorite apps",this::allApps));
         TextView h=action("Hidden apps ("+hidden.size()+")",this::hiddenApps);h.setId(R.id.hidden_apps);body.addView(h);
         body.addView(action("Clear favorites",()->dialog().setTitle("Clear favorites?").setMessage("Your apps will stay installed.").setNegativeButton("Cancel",null).setPositiveButton("Clear",(d,w)->{favorites.clear();saveFavorites();settings();}).show()));
-        body.addView(action("Remove all opening pauses",()->{paused.clear();prefs.edit().putStringSet("paused",new HashSet<>(paused)).apply();toast("Opening pauses removed.");}));
+        body.addView(action("Remove manual opening pauses",()->{paused.clear();prefs.edit().putStringSet("paused",new HashSet<>(paused)).apply();toast("Opening pauses removed.");}));
         body.addView(action("Android settings",()->safeStart(new Intent(Settings.ACTION_SETTINGS))));
         body.addView(action("Help & privacy",()->dialog().setTitle("Your phone, your choice")
-            .setMessage("Hold an app to rename, favorite, hide, or add an opening pause.\n\nTo switch back, open Android Settings → Apps → Default apps → Home app.\n\nPauses work only for apps opened from Quiet. Hidden apps remain accessible outside Quiet. Focus blocks apply only to apps launched from Quiet.\n\nOffline. No ads, account or analytics. No Accessibility service, app monitoring, or sensitive permissions. Preferences stay on this device; Android backup is disabled.\n\nVersion 1.4 · Android 11+ · Personal profile only. Work profiles, Private Space, widgets, notification filtering are not included.")
+            .setMessage("Hold an app to rename, favorite, hide, or add an opening pause.\n\nTo switch back, open Android Settings → Apps → Default apps → Home app.\n\nPauses work only for apps opened from Quiet. Hidden apps remain accessible outside Quiet. Focus blocks apply only to apps launched from Quiet.\n\nOffline. No ads, account or analytics. No Accessibility service, app monitoring, or sensitive permissions. Installed app names are read locally to display your app list. Favorites, hidden apps, renamed labels and focus settings stay on this device; Android backup is disabled. Clear Android app storage or uninstall Quiet to delete them. Setup details are copied only when you tap Copy setup details; you choose whether to share them.\n\nVersion 1.5 · Android 11+ · Personal profile only. Work profiles, Private Space, widgets, notification filtering are not included.")
             .setPositiveButton("Got it",null).show()));
     }
 }

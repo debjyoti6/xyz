@@ -45,7 +45,8 @@ public class LauncherUiTest {
         Intent query = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
         for (ResolveInfo info: context.getPackageManager().queryIntentActivities(query,0)) {
             if (info.activityInfo != null && info.activityInfo.exported &&
-                    !info.activityInfo.packageName.equals(context.getPackageName())) {
+                    !info.activityInfo.packageName.equals(context.getPackageName()) &&
+                    !GuardPolicy.isEssential(context,info.activityInfo.packageName)) {
                 sampleId = new ComponentName(info.activityInfo.packageName,info.activityInfo.name).flattenToString();
                 break;
             }
@@ -144,14 +145,46 @@ public class LauncherUiTest {
     }
     @Test public void focusBlocksSelectedAppAndExpires() {
         String pkg=ComponentName.unflattenFromString(sampleId).getPackageName();
-        prefs.edit().putStringSet("guarded",Collections.singleton(pkg)).putLong("focusUntil",2000L).commit();
-        assertTrue(GuardPolicy.blocked(prefs,pkg,1999));
-        assertFalse(GuardPolicy.blocked(prefs,pkg,2000));
-        assertFalse(GuardPolicy.blocked(prefs,"not.selected",1000));
-        prefs.edit().remove("focusUntil").putLong("break:"+pkg,4000L).commit();
-        assertTrue(GuardPolicy.blocked(prefs,pkg,3999));
-        assertFalse(GuardPolicy.blocked(prefs,pkg,4000));
+        prefs.edit().putStringSet("guarded",Collections.singleton(pkg)).commit();
+        FocusSession.start(prefs,1,100_000,10_000,5);
+        assertTrue(GuardPolicy.blocked(prefs,pkg,FocusSession.remaining(prefs,159_999,69_999,5)));
+        assertFalse(GuardPolicy.blocked(prefs,pkg,FocusSession.remaining(prefs,160_000,70_000,5)));
+        assertFalse(GuardPolicy.blocked(prefs,"not.selected",60_000));
         assertTrue(GuardPolicy.isEssential(InstrumentationRegistry.getInstrumentation().getTargetContext(),"com.android.settings"));
+    }
+    @Test public void clockChangesDoNotShortenOrExtendFocusWithinBoot() {
+        FocusSession.start(prefs,25,1_000_000,100_000,7);
+        long expected=1_490_000;
+        assertEquals(expected,FocusSession.remaining(prefs,99_000_000,110_000,7));
+        assertEquals(expected,FocusSession.remaining(prefs,1,110_000,7));
+        // Simulate process recreation by reopening the same persistent preferences.
+        SharedPreferences reopened=InstrumentationRegistry.getInstrumentation().getTargetContext()
+            .getSharedPreferences("quiet",Context.MODE_PRIVATE);
+        assertEquals(expected,FocusSession.remaining(reopened,1,110_000,7));
+        FocusSession.end(prefs);
+        assertEquals(0,FocusSession.remaining(prefs,1_000_000,110_000,7));
+    }
+    @Test public void rebootAndLegacyFocusHaveBoundedRecovery() {
+        FocusSession.start(prefs,15,100_000,10_000,2);
+        assertEquals(899_000,FocusSession.remaining(prefs,101_000,500,3));
+        assertEquals(900_000,FocusSession.remaining(prefs,1,500,3));
+        assertEquals(0,FocusSession.remaining(prefs,1_100_000,500,3));
+        prefs.edit().clear().putLong("focusUntil",500_000).commit();
+        assertEquals(100_000,FocusSession.remaining(prefs,400_000,500,3));
+    }
+    @Test public void focusScreenUpdatesWhenSessionExpires() {
+        Context c=InstrumentationRegistry.getInstrumentation().getTargetContext();
+        FocusSession.start(c,prefs,1);
+        scenario=ActivityScenario.launch(MainActivity.class);
+        onView(withId(R.id.focus_controls)).perform(scrollTo(),click());
+        scenario.onActivity(a->prefs.edit().putLong("focusElapsedEnd",android.os.SystemClock.elapsedRealtime()-1).commit());
+        onView(isRoot()).perform(new ViewAction() {
+            public Matcher<View> getConstraints() { return isRoot(); }
+            public String getDescription() { return "wait for visible focus expiry"; }
+            public void perform(UiController ui,View root) { ui.loopMainThreadForAtLeast(1200); }
+        });
+        onView(withId(R.id.focus_status)).check(matches(withText("No active focus session")));
+        onView(withText("End focus session")).check(matches(not(isDisplayed())));
     }
 
 }

@@ -46,12 +46,16 @@ public final class HomeSetupActivity extends Activity {
         LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);
         body.setBackgroundColor(Color.BLACK);scroll.addView(body);setContentView(scroll);
         getWindow().setDecorFitsSystemWindows(false);
+        if (getWindow().getInsetsController()!=null)
+            getWindow().getInsetsController().setSystemBarsAppearance(0,
+                android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS |
+                android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS);
         scroll.setOnApplyWindowInsetsListener((v,insets)->{
             Insets i=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout());
             body.setPadding(dp(24)+i.left,dp(20)+i.top,dp(24)+i.right,dp(20)+i.bottom);return insets;
         });scroll.requestApplyInsets();
         text(body,"Set up your home screen",28);
-        text(body,"Quiet Launcher 1.4",16);
+        text(body,"Quiet Launcher 1.5",16);
         status=text(body,"Checking Android's current Home app…",19);
         text(body,"Choose Quiet Launcher in the Android dialog and confirm Set as default or Always. Then press your phone's Home button or use its Home gesture.",17);
         button(body,"Choose Quiet as default Home",this::requestHome);
@@ -110,7 +114,7 @@ public final class HomeSetupActivity extends Activity {
     }
     @Override protected void onDestroy() {handler.removeCallbacksAndMessages(null);super.onDestroy();}
     private String diagnostics() {
-        StringBuilder out=new StringBuilder("Quiet 1.4 Home setup\n");
+        StringBuilder out=new StringBuilder("Quiet 1.5 Home setup\n");
         out.append("Phone: ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL)
             .append("\nAndroid: ").append(Build.VERSION.RELEASE).append(" (API ").append(Build.VERSION.SDK_INT).append(")");
         UserManager um=getSystemService(UserManager.class);
