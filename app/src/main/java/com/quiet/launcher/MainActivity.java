@@ -215,7 +215,7 @@ public final class MainActivity extends Activity {
         favoriteRows=column(); body.addView(favoriteRows); renderFavorites();
         gap(body,26);
         TextView all = action("All apps  →",this::allApps); all.setId(R.id.all_apps); body.addView(all);
-        TextView focus=action(prefs.getLong("focusUntil",0)>System.currentTimeMillis()?"Focus is active · controls":"Focus & Scroll Guard",this::focusSettings); body.addView(focus);
+        TextView focus=action(prefs.getLong("focusUntil",0)>System.currentTimeMillis()?"Focus is active · controls":"Focus controls",this::focusSettings); body.addView(focus);
         TextView settings = action("Preferences",this::settings); settings.setId(R.id.preferences); body.addView(settings);
     }
     private void renderFavorites() {
@@ -418,30 +418,19 @@ public final class MainActivity extends Activity {
                 .setMessage("Your selected apps will become available again.").setNegativeButton("Keep focusing",null)
                 .setPositiveButton("End session",(d,w)->{prefs.edit().remove("focusUntil").apply();focusSettings();}).show()));
         }
-        body.addView(action("Scroll session: "+prefs.getInt("sessionMinutes",5)+" minutes",()->{
-            int[] values={2,5,10,15}; dialog().setTitle("Return home after continuous use")
-                .setItems(new String[]{"2 minutes","5 minutes","10 minutes","15 minutes"},(d,i)->{
-                    prefs.edit().putInt("sessionMinutes",values[i]).apply();focusSettings();}).show();
-        }));
-        body.addView(text("Scroll Guard: "+(GuardService.isEnabled(this)?"enabled":"off"),20,fg));
-        body.addView(text("With Scroll Guard enabled, selected apps are closed during focus sessions. Outside focus, it returns you home after your session limit and adds a one-minute break. Without it, pauses and focus blocks apply only to apps opened from Quiet.",16,muted));
-        body.addView(action(GuardService.isEnabled(this)?"Manage Scroll Guard access":"Enable Scroll Guard",()->{
-            dialog().setTitle("Optional Accessibility access")
-                .setMessage("Quiet uses app-switch events to identify the foreground app and time your selected apps. When a focus block or session limit applies, it performs the Home action. It does not read screen text, messages, passwords, or browsing content; no information leaves your phone. You can turn it off in Accessibility settings at any time. Some phones restrict accessibility for sideloaded apps; if Android blocks it, use launcher-only focus controls.")
-                .setNegativeButton("Not now",null).setPositiveButton("Open Accessibility settings",(d,w)->safeStart(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))).show();
-        }));
+        body.addView(text("Focus applies only to apps opened from Quiet. This version has no Accessibility service and cannot close other apps or monitor your scrolling. Use Android Digital Wellbeing for system app timers.",16,muted));
         body.addView(action("Android Digital Wellbeing",()->{
             try { startActivity(new Intent("android.settings.WELLBEING_SETTINGS")); }
             catch(RuntimeException e) { safeStart(new Intent(Settings.ACTION_SETTINGS)); toast("Search Settings for Digital Wellbeing or app timers."); }
         }));
-        body.addView(text("Phone, Settings and your default home app are excluded. Focus can always be ended here. Guard does not detect individual Reels or Shorts: it limits the entire selected app.",15,muted));
+        body.addView(text("Phone, Settings and your default home app are excluded. Focus can always be ended here. These controls do not block apps opened from notifications, links or Recents.",15,muted));
     }
     private void settings() {
         closeKeyboard(); frame("settings"); LinearLayout body=scrollingBody();
         body.addView(action("←  Home",this::home)); body.addView(text("Preferences",32,fg)); gap(body,18);
         body.addView(action(isDefaultHome()?"Change default home app":"Set as default home",this::defaultHome));
         body.addView(action("Open Android Home app settings",this::openHomeSettings));
-        body.addView(action("Focus & Scroll Guard",this::focusSettings));
+        body.addView(action("Focus controls",this::focusSettings));
         body.addView(action(light?"Appearance: Paper":"Appearance: Black",()->{prefs.edit().putBoolean("light",!light).apply();settings();}));
         body.addView(action("App text size: "+appTextSize(),()->{
             String[] labels={"Compact · 24","Comfortable · 28","Large · 32"}; int[] sizes={24,28,32};
@@ -457,7 +446,7 @@ public final class MainActivity extends Activity {
         body.addView(action("Remove all opening pauses",()->{paused.clear();prefs.edit().putStringSet("paused",new HashSet<>(paused)).apply();toast("Opening pauses removed.");}));
         body.addView(action("Android settings",()->safeStart(new Intent(Settings.ACTION_SETTINGS))));
         body.addView(action("Help & privacy",()->dialog().setTitle("Your phone, your choice")
-            .setMessage("Hold an app to rename, favorite, hide, or add an opening pause.\n\nTo switch back, open Android Settings → Apps → Default apps → Home app.\n\nPauses work only for apps opened from Quiet. Hidden apps remain accessible outside Quiet. Enable Scroll Guard in Focus controls to apply selected-app blocks outside Quiet too.\n\nOffline. No ads, account or analytics. Scroll Guard is optional and requires Accessibility access. It sees app-switch events only, never screen content. Preferences stay on this device; Android backup is disabled.\n\nVersion 1.3 · Android 12+ · Personal profile only. Work profiles, Private Space, widgets, notification filtering are not included.")
+            .setMessage("Hold an app to rename, favorite, hide, or add an opening pause.\n\nTo switch back, open Android Settings → Apps → Default apps → Home app.\n\nPauses work only for apps opened from Quiet. Hidden apps remain accessible outside Quiet. Focus blocks apply only to apps launched from Quiet.\n\nOffline. No ads, account or analytics. No Accessibility service, app monitoring, or sensitive permissions. Preferences stay on this device; Android backup is disabled.\n\nVersion 1.4 · Android 12+ · Personal profile only. Work profiles, Private Space, widgets, notification filtering are not included.")
             .setPositiveButton("Got it",null).show()));
     }
 }

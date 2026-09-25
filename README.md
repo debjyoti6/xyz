@@ -1,27 +1,19 @@
-# Quiet Launcher 1.3 — Android 12+
+# Quiet Launcher 1.4 — Android 12+
 
-A native, offline text launcher with favorites, app search, rename/hide, adjustable text and opening pauses.
+Native, offline text launcher with favorites, search, rename/hide, opening pauses and focus sessions.
 
-## Set up
-1. Install the APK and open Quiet Launcher.
-2. Tap **Set Quiet as your home screen** (or **Choose default home app** on the welcome screen), then **Choose Quiet as default Home**, select Quiet Launcher, and confirm Android's dialog. Press Home to verify.
-3. If the dialog is cancelled or unavailable, use **Open Android Home settings** on the setup screen and select Quiet. Phone menus vary by manufacturer. If it still fails, use **Copy setup details** and share those details with a screenshot of the Android Home app list.
-4. Open **Focus & Scroll Guard → Distracting apps** and select the apps you want to limit.
-5. Choose a 15/25/45/60-minute focus session. Selected apps are blocked when opened from Quiet, and receive an opening pause outside focus.
-6. Optionally enable **Quiet Scroll Guard** in Android Accessibility settings after reading the disclosure. It applies focus blocks to selected apps opened from notifications or Recents too. Outside focus it returns home after 2/5/10/15 minutes of continuous use and enforces a one-minute break.
+## Install and choose Home
+Install the APK, open Quiet, tap Choose default home app, then Choose Quiet as default Home. Select Quiet Launcher in Android and confirm. Press Home. The setup screen also offers Android Home settings and Copy setup details for troubleshooting.
 
-Focus can be ended early from Quiet. Settings, Phone and the current default home app are excluded. Hidden apps can be restored from Preferences. Switch back to another home app through Android settings at any time.
+Version 1.4 removes Scroll Guard and its Accessibility service entirely. Google Play Protect can block internet-sideloaded apps with sensitive access in some markets. This is a potential cause of earlier installation problems, not a confirmed diagnosis on the user's phone. Keep Play Protect enabled; allow a requested app scan. If blocked, share the exact warning and phone model rather than disabling device protection.
 
-## Limits and privacy
-Scroll Guard is optional and uses only app-switch events and the Home action; screen-content retrieval is disabled. It does not inspect messages, passwords, feeds, Reels or Shorts, and never uploads data. It limits the whole selected app. No network, device-admin, overlay or usage-history permission. Preferences and selected package names stay on-device; backup is disabled.
+## Focus and limits
+Choose distracting apps under Focus controls. Start a 15/25/45/60-minute focus session. Selected apps are blocked when opened from Quiet during focus and get an opening pause outside focus. Focus can be ended early. Notifications, links, Recents and other launchers can still open these apps. Use Android Digital Wellbeing for system app timers. Quiet cannot monitor scrolling, close other apps, or detect Reels/Shorts.
 
-A session resets when you switch to another app or lock the screen. This is a voluntary focus aid, not tamper-proof parental control. Services can be stopped by Android or the user. If a phone restricts accessibility access for sideloaded apps, use the launcher controls or Android Digital Wellbeing. No universal device compatibility claim; OEM testing remains necessary.
+## Privacy
+No requested permissions, Accessibility service, notification listener, network, analytics, ads or account. Preferences stay on the device; backup is disabled. Phone, Settings and the current default Home app are excluded from focus blocks. Personal profile only; work profiles, Private Space, widgets and notification filtering are not implemented.
 
-This version supports the personal profile. Work profiles, Private Space, widgets and notification filtering are not implemented.
+## Build and validation
+Java 17, Gradle 8.9, SDK 35. CI builds a non-debuggable release, verifies its APK signature and packaged manifest, and runs lint. Android 12 and 15 emulator checks run six instrumentation tests, then install the actual release artifact and exercise the real HOME chooser, cancellation/retry and Home-button behavior. Emulator tests do not verify Play Protect acceptance on a physical phone.
 
-## Build and checks
-Java 17, Gradle 8.9, Android SDK 35. Run `gradle :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug`.
-Device checks: `gradle :app:connectedDebugAndroidTest`. GitHub Actions tests API 31–36.
-Tests cover HOME registration, role request availability, favorites after recreation, rename, hide/restore, pauses and focus/cooldown boundaries. The host-side UI test also cancels and retries the real Android HOME role dialog, selects Quiet, confirms, checks the system resolver, presses Home, and checks Home again after opening Settings. It does not assign HOME through shell commands. Screenshots and XML are saved in the device report artifacts. Real-phone permission flows and Scroll Guard timing still need hands-on verification.
-
-APKs are debug builds. If an update reports a signing conflict, uninstall the old build first (this clears Quiet preferences; installed apps and files are unaffected). CI preserves its debug signing key in a cache for subsequent builds, but cache eviction may require reinstalling.
+CI uses the same cached development signing key as v1.3 to permit updates. This is a personal test distribution, not a Play Store release. Cache loss can change the signer; an update conflict then requires uninstalling the previous build, which clears Quiet's preferences. For local release signing supply QUIET_SIGNING_STORE pointing to an Android debug-format keystore, or configure your own signing credentials.

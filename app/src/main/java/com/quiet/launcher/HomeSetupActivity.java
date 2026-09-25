@@ -51,7 +51,7 @@ public final class HomeSetupActivity extends Activity {
             body.setPadding(dp(24)+i.left,dp(20)+i.top,dp(24)+i.right,dp(20)+i.bottom);return insets;
         });scroll.requestApplyInsets();
         text(body,"Set up your home screen",28);
-        text(body,"Quiet Launcher 1.3",16);
+        text(body,"Quiet Launcher 1.4",16);
         status=text(body,"Checking Android's current Home app…",19);
         text(body,"Choose Quiet Launcher in the Android dialog and confirm Set as default or Always. Then press your phone's Home button or use its Home gesture.",17);
         button(body,"Choose Quiet as default Home",this::requestHome);
@@ -110,7 +110,7 @@ public final class HomeSetupActivity extends Activity {
     }
     @Override protected void onDestroy() {handler.removeCallbacksAndMessages(null);super.onDestroy();}
     private String diagnostics() {
-        StringBuilder out=new StringBuilder("Quiet 1.3 Home setup\n");
+        StringBuilder out=new StringBuilder("Quiet 1.4 Home setup\n");
         out.append("Phone: ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL)
             .append("\nAndroid: ").append(Build.VERSION.RELEASE).append(" (API ").append(Build.VERSION.SDK_INT).append(")");
         UserManager um=getSystemService(UserManager.class);
